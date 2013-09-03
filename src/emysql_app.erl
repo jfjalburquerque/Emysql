@@ -35,7 +35,7 @@ start(_Type, _StartArgs) ->
     %   "%MAKETIME%" -> ok; % happens with rebar build
     %   _ -> io:format("Build time: ~p~n", StartArgs)
     % end,
-
+    emysql_metrics:init(),
     emysql_sup:start_link().
 
 stop(_State) ->

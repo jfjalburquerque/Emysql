@@ -81,17 +81,23 @@ wait_for_connection(PoolId ,Timeout)->
         unavailable ->
             %-% io:format("~p is queued~n", [self()]),
             receive
-                {connection, Connection} -> Connection
+                {connection, Connection} -> 
+                    emysql_metrics:notify_lock(),
+                    Connection
             after Timeout ->
                 do_gen_call({abort_wait, PoolId}),
                 receive
-                    {connection, Connection} -> Connection
-                after
-                    0 -> exit(connection_lock_timeout)
+                    {connection, Connection} -> 
+                        emysql_metrics:notify_lock(),
+                        Connection
+                after 0 -> 
+                    emysql_metrics:notify_abort(),
+                    exit(connection_lock_timeout)
                 end
             end;
         Connection ->
             %-% io:format("~p gets connection~n", [self()]),
+            emysql_metrics:notify_lock(),
             Connection
     end.
 
@@ -214,6 +220,7 @@ handle_call({lock_connection, PoolId, Wait, Who}, {From, _Mref}, State) ->
 						    lockers = dict:store(MonitorRef, Data, Lockers)}};
                 unavailable when Wait =:= true ->
                     %% place the calling pid at the end of the waiting queue of its pool
+                    emysql_metrics:notify_wait(),
                     PoolNow = Pool#pool{waiting = queue:in(From, Pool#pool.waiting)},
                     {reply, unavailable, State#state{pools=[PoolNow|OtherPools]}};
                 unavailable when Wait =:= false ->
@@ -255,7 +262,7 @@ handle_call({{replace_connection, Kind}, OldConn, NewConn}, _From, State) ->
     %% passed in to serve as the replacement for the old one.
     %% But i.e. if the sql server is down, it can be fed a dead
     %% old connection as new connection, to preserve the pool size.
-
+    emysql_metrics:notify_release(),
     case find_pool(OldConn#emysql_connection.pool_id, State#state.pools) of
 	    {#pool{available = Available, locked = Locked} = Pool, Pools} ->
 		    OldRef = OldConn#emysql_connection.monitor_ref,

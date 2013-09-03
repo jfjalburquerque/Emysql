@@ -13,6 +13,6 @@
     {modules, []}, 
     {mod, {emysql_app, ["%MAKETIME%"]}},
     {registered, []},
-    {applications, [kernel, stdlib, crypto]},
+    {applications, [kernel, stdlib, crypto, folsom]},
     {env, [{default_timeout, 5000}, {conn_test_period, 28000}]}
 ]}.
