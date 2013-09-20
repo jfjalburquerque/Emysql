@@ -36,13 +36,18 @@
     notify_wait/0
 ]).
 
+-define(SLIDE_TIME, 900). %% 15 minutes
+
 -spec init() -> ok.
 
 init() ->
     Metrics = [
-        <<"lock">>, <<"release">>, <<"abort">>, <<"wait">>
+        <<"emysqlLocks">>, <<"emysqlReleases">>, 
+        <<"emysqlAborts">>, <<"emysqlWaits">>
     ],
     [ folsom_metrics:new_spiral(Metric) || Metric <- Metrics ],
+    folsom_metrics:new_histogram(<<"emysqlConnUsage">>, slide, ?SLIDE_TIME),
+    folsom_metrics:new_counter(<<"emysqlConns">>),
     ok.
 
 -type notify_return() ::
@@ -52,21 +57,34 @@ init() ->
 
 -spec notify_lock() -> notify_return().
 
-notify_lock() -> notify(<<"lock">>).
+notify_lock() -> 
+    folsom_metrics_counter:inc(<<"emysqlConns">>), 
+    Active = folsom_metrics_counter:get_value(<<"emysqlConns">>),
+    folsom_metrics:notify(<<"emysqlConnUsage">>, Active),
+    notify(<<"emysqlLocks">>).
 
 -spec notify_release() -> notify_return().
 
-notify_release() -> notify(<<"release">>).
+notify_release() -> 
+    folsom_metrics_counter:dec(<<"emysqlConns">>), 
+    Active = folsom_metrics_counter:get_value(<<"emysqlConns">>),
+    folsom_metrics:notify(<<"emysqlConnUsage">>, Active),
+    notify(<<"emysqlReleases">>).
 
 -spec notify_abort() -> notify_return().
 
-notify_abort() -> notify(<<"abort">>).
+notify_abort() -> notify(<<"emysqlAborts">>).
 
 -spec notify_wait() -> notify_return().
 
-notify_wait() -> notify(<<"wait">>).
+notify_wait() -> notify(<<"emysqlWaits">>).
 
 -spec notify(Metric :: binary()) -> notify_return().
 
 notify(Metric) ->
     folsom_metrics:notify({Metric, 1}).
+
+-spec notify(Metric :: binary(), Value :: integer()) -> notify_return().
+
+notify(Metric, Value) ->
+    folsom_metrics:notify({Metric, Value}).

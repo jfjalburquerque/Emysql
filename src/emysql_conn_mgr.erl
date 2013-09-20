@@ -224,6 +224,7 @@ handle_call({lock_connection, PoolId, Wait, Who}, {From, _Mref}, State) ->
                     PoolNow = Pool#pool{waiting = queue:in(From, Pool#pool.waiting)},
                     {reply, unavailable, State#state{pools=[PoolNow|OtherPools]}};
                 unavailable when Wait =:= false ->
+                    emysql_metrics:notify_abort(),
                     {reply, unavailable, State}
             end;
         undefined ->
@@ -262,7 +263,6 @@ handle_call({{replace_connection, Kind}, OldConn, NewConn}, _From, State) ->
     %% passed in to serve as the replacement for the old one.
     %% But i.e. if the sql server is down, it can be fed a dead
     %% old connection as new connection, to preserve the pool size.
-    emysql_metrics:notify_release(),
     case find_pool(OldConn#emysql_connection.pool_id, State#state.pools) of
 	    {#pool{available = Available, locked = Locked} = Pool, Pools} ->
 		    OldRef = OldConn#emysql_connection.monitor_ref,
@@ -270,6 +270,7 @@ handle_call({{replace_connection, Kind}, OldConn, NewConn}, _From, State) ->
 		    {NewPool, NewMonitors} =
 			    case Kind of
 				    available ->
+                        emysql_metrics:notify_release(),
 					    serve_waiting_pids(
 					      Pool#pool { locked = Stripped,
 							  available = queue:in(
@@ -415,7 +416,7 @@ lock_next_connection(Available ,Locked, Who) ->
     end.
 
 connection_locked_at(Conn, MonitorRef) ->
-	Conn#emysql_connection{locked_at=lists:nth(2, tuple_to_list(now())),
+	Conn#emysql_connection{locked_at=lists:nth(2, tuple_to_list(os:timestamp())),
 			       monitor_ref = MonitorRef}.
 
 serve_waiting_pids(Pool) ->
