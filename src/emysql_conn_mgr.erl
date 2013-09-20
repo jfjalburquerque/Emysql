@@ -296,6 +296,7 @@ handle_call({{replace_connection, Kind}, OldConn, NewConn}, _From, State) ->
 						 %% We need to keep the monitor here
 						 dict:store(OldRef, {NewConn#emysql_connection.pool_id, NewConn#emysql_connection.id}, Lockers)
 				 end,
+            emysql_metrics:set_max_locks(dict:size(NewLockers)),
 		    {reply, ok, State#state{pools = [NewPool|Pools],
 					    lockers = NewLockers}};
 	   undefined ->
