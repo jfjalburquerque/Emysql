@@ -58,16 +58,14 @@ init() ->
 -spec notify_lock() -> notify_return().
 
 notify_lock() -> 
-    folsom_metrics_counter:inc(<<"emysqlConns">>), 
-    Active = folsom_metrics_counter:get_value(<<"emysqlConns">>),
+    Active = folsom_metrics_counter:inc(<<"emysqlConns">>), 
     folsom_metrics:notify(<<"emysqlConnUsage">>, Active),
     notify(<<"emysqlLocks">>).
 
 -spec notify_release() -> notify_return().
 
 notify_release() -> 
-    folsom_metrics_counter:dec(<<"emysqlConns">>), 
-    Active = folsom_metrics_counter:get_value(<<"emysqlConns">>),
+    Active = folsom_metrics_counter:dec(<<"emysqlConns">>), 
     folsom_metrics:notify(<<"emysqlConnUsage">>, Active),
     notify(<<"emysqlReleases">>).
 
