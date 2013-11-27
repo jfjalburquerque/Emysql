@@ -37,7 +37,7 @@
     set_max_locks/1
 ]).
 
--define(SLIDE_TIME, 900). %% 15 minutes
+-define(SLIDE_TIME, 300). %% 5 minutes
 
 -spec init() -> ok.
 
