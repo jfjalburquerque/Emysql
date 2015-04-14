@@ -427,7 +427,7 @@ encode(Val, binary) when is_integer(Val) ->
     list_to_binary(integer_to_list(Val));
 encode(Val, list) when is_float(Val) ->
     [Res] = io_lib:format("~w", [Val]),
-    Res;
+    list_to_binary(Res);
 encode(Val, binary) when is_float(Val) ->
     iolist_to_binary(io_lib:format("~w", [Val]));
 encode({datetime, Val}, ReturnType) ->
