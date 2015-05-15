@@ -113,7 +113,29 @@ If you are looking for the **plain necessities**, you should use the [ejabberd][
 
 #### Transaction
 
-This driver currently does not support transactions.
+This driver supports transaction in this way:
+
+Usage:
+
+```erlang
+Transaction = fun(Q) ->
+   R1 =  Q(<<"SELECT * from some_table">>, []),
+   R2 =  Q(<<"SELECT * from some_other_table">>, []),
+   R3 =  Q(<"INSERT INTO ...">>, []),
+   ....
+
+   {ok, SomeResult}
+end,
+
+{ok, Result} = emysql:transaction(Pool, Transaction,  Timeout).
+
+The transaction fun receive one argument, wich is also a function.
+That is used to perform queries.  Only textual queries allowed
+(no prepared statments with arguments).
+
+The result is the return value of the transaction function.
+If the function crashes, transaction is aborted. That is the only
+way to abort the transaction: throwing an error.
 
 For **mnesia-style transactions**, one of the multiple '[erlang-mysql-driver][22]s' may suite you best. There are [quite many][16] branches of it out there, and they are based on the same project as the ejabberd driver. To learn more about out the differences between the drivers, see the [mysql driver history][History].
 
