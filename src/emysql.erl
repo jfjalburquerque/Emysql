@@ -110,7 +110,7 @@
 %% Used to interact with the database.    
 -export([
             prepare/2,
-            execute/2, execute/3, execute/4, execute/5,
+            execute/2, execute/3, execute/4, execute/5, transaction/3,
             default_timeout/0
 ]).
 
@@ -533,6 +533,11 @@ execute(PoolId, Query, Timeout) when (is_list(Query) orelse is_binary(Query)) an
 execute(PoolId, StmtName, Timeout) when is_atom(StmtName), (is_integer(Timeout) orelse Timeout == infinity) ->
     execute(PoolId, StmtName, [], Timeout).
 
+transaction(PoolId, Fun, Timeout) when is_function(Fun) ->
+    Connection = emysql_conn_mgr:wait_for_connection(PoolId),
+    monitor_work(Connection, Timeout, {transaction, Connection, Fun}). 
+
+
 %% @spec execute(PoolId, Query|StmtName, Args, Timeout) -> Result | [Result]
 %%      PoolId = atom()
 %%      Query = binary() | string()
@@ -759,7 +764,16 @@ monitor_work(Connection0, Timeout, Args) when is_record(Connection0, emysql_conn
     {Pid, Mref} = spawn_monitor(
                     fun() ->
                             put(query_arguments, Args),
-                            Parent ! {self(), apply(fun emysql_conn:execute/3, Args)}
+                            %Parent ! {self(), apply(fun emysql_conn:execute/3, Args)}
+                            case Args of
+                                {transaction, _MaybeOtherConnection, Fun} ->
+                                    #ok_packet{} = emysql_conn:execute(Connection, <<"START TRANSACTION;">>, []),
+                                    Result = Fun(fun(Query, Params) -> emysql_conn:execute(Connection, Query, Params) end),
+                                    #ok_packet{} = emysql_conn:execute(Connection, <<"COMMIT;">>, []),
+                                    Parent ! {self(), Result};
+                                _ ->
+                                    Parent ! {self(), apply(fun emysql_conn:execute/3, Args)}
+                            end
                     end),
     receive
         {'DOWN', Mref, process, Pid, tcp_connection_closed} ->
