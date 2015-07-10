@@ -767,9 +767,7 @@ monitor_work(Connection0, Timeout, Args) when is_record(Connection0, emysql_conn
                             %Parent ! {self(), apply(fun emysql_conn:execute/3, Args)}
                             case Args of
                                 {transaction, _MaybeOtherConnection, Fun} ->
-                                    #ok_packet{} = emysql_conn:execute(Connection, <<"START TRANSACTION;">>, []),
-                                    Result = Fun(fun(Query, Params) -> emysql_conn:execute(Connection, Query, Params) end),
-                                    #ok_packet{} = emysql_conn:execute(Connection, <<"COMMIT;">>, []),
+                                    Result = execute_transaction(Connection, Fun),
                                     Parent ! {self(), Result};
                                 _ ->
                                     Parent ! {self(), apply(fun emysql_conn:execute/3, Args)}
@@ -808,4 +806,44 @@ monitor_work(Connection0, Timeout, Args) when is_record(Connection0, emysql_conn
         exit(Pid, kill),
         emysql_conn:reset_connection(emysql_conn_mgr:pools(), Connection, pass),
         exit(mysql_timeout)
+    end.
+
+%% @spec execute_transaction(Connection, Fun) -> Result
+%%      Connection = pid()
+%%      Fun = fun()
+
+%%      Result = ok_packet() | result_packet() | error_packet()
+%%
+%% @doc Execute a transaction function
+%%
+%% @private
+%% @end doc: jfjalburquerque july 15
+%%
+execute_transaction(Connection, Fun) ->
+    Result = try
+                 case emysql_conn:execute(Connection, <<"START TRANSACTION;">>, []) of
+                     #ok_packet{} ->
+                         %% execute transaction function
+                         Fun(fun(Query, Params) -> emysql_conn:execute(Connection, Query, Params) end);
+                     MysqlError -> MysqlError
+                 end
+             catch
+                 _:Error ->
+                     %% in case of error in the transaction function
+                     %% we send #error_packet to do rollback
+                     #error_packet{msg = Error}
+             end,
+    case Result of
+        #error_packet{} ->
+            %% in case of #error_packet we execute rollback
+            case emysql_conn:execute(Connection, <<"ROLLBACK;">>, []) of
+                #ok_packet{} -> Result#error_packet{code = 1402, status = <<"XA100">>};
+                RollbackError -> RollbackError
+            end;
+        _ ->
+            %% in case of #ok_packet we execute commit
+            case emysql_conn:execute(Connection, <<"COMMIT;">>, []) of
+                #ok_packet{} -> Result;
+                CommitError -> CommitError
+            end
     end.
